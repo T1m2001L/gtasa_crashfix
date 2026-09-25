@@ -13,14 +13,11 @@
 #include "CParseCommandLine.h"
 #include <iostream>
 #include <fstream>
-#include <Wininet.h>
 #include "crashes.h"
 
 using namespace std;
 
 CVector vecCenterOfWorld;
-
-HMODULE g_hMod = 0;
 
 static void WINAPI Load(HMODULE hModule);
 
@@ -33,7 +30,6 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 	{
 		case DLL_PROCESS_ATTACH:
 		{
-			g_hMod = hModule;
 			HANDLE hThread = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)Load, hModule, 0, 0);
 			if (hThread == NULL) 
 			{
@@ -61,61 +57,6 @@ void SetHeatHazeEnabled ( bool bEnabled )
     else
         MemPut < BYTE > ( 0x701780, 0xC3 );
 }
-
-void checkForUpdate() {
-	remove("crashes.delete");
-	HINTERNET hNet, hNetFile;
-
-	hNet = InternetOpenA("Mozilla/5.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
-	if(hNet == NULL)
-		return;
-
-		hNetFile = InternetOpenUrlA(hNet, "https://raw.githubusercontent.com/Whitetigerswt/gtasa_crashfix/master/LatestVersion.txt", 0, 0, 0, 0);
-
-	if(hNetFile == NULL)
-		return;
-
-	char szLatestVersion[256];
-	DWORD dwBytesRead = 0;
-	do {
-		InternetReadFile(hNetFile, (LPVOID)szLatestVersion, 256, &dwBytesRead);
-	} while(dwBytesRead > 0);
-
-	float version;
-	char* url = new char[200];
-	sscanf_s(szLatestVersion, "%f %s", &version, url, 200);
-
-	if(version > VERSION) {
-		DeleteUrlCacheEntry(url);
-
-		char currentDir[MAX_PATH + 15];
-		GetCurrentDirectory( MAX_PATH, currentDir );
-
-		strcat_s(currentDir, "\\crashes.delete_");
-
-		DeleteFile(currentDir);
-
-		HRESULT hr = URLDownloadToFile(NULL, url, currentDir, 0, NULL); 
-
-		if(SUCCEEDED(hr)) {
-			char currentMod[MAX_PATH + 15];
-			GetModuleFileName(g_hMod, currentMod, MAX_PATH+15);
-
-			currentMod[strlen(currentMod)] = '\0';
-
-			rename(currentMod, "crashes.delete");
-
-			rename(currentDir, "crashes.asi");
-
-			LoadLibrary("crashes.asi");
-			delete[] url;
-
-			FreeLibraryAndExitThread(g_hMod, 0);
-		}
-	}
-	delete[] url;
-}
-
 
 static void WINAPI Load(HMODULE hModule) 
 {
@@ -552,8 +493,6 @@ static void WINAPI Load(HMODULE hModule)
 		readfile.close();
 	}
 
-	checkForUpdate();
-	
 	bool laststate = false;
 	int previousbrightness = -1;
 	if(brightness != -1 || mousefix == 1)
