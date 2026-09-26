@@ -19,6 +19,9 @@ using namespace std;
 
 CVector vecCenterOfWorld;
 
+DWORD SAMPAddr;
+void PatchInJump(DWORD dwAddress, VOID* dwJumpTo);
+
 static void WINAPI Load(HMODULE hModule);
 
 BOOL APIENTRY DllMain( HMODULE hModule,
@@ -83,11 +86,8 @@ static void WINAPI Load(HMODULE hModule)
 	// Allow windowed mode. Alt+enter to activate (reversed addresses from http://ugbase.eu/index.php?threads/gta-sa-multiprocess-updated.4100/)
 	MemCpy((void*)0x074872D, "\x90\x90\x90\x90\x90\x90\x90\x90\x90", 9);
 
-	// Hack to make SA-MP think the game is always unpaused
-	MemCpy((void*)0x53E9B3, "\x75\x44\x90\x90\x90\x90", 6); // jne 0x53E9F9
-
-	// Hack to make the game run in the background when paused
-	MemPut < BYTE >(0x561AF6, 0x00); // mov byte ptr [0xB7CB49],01 -> mov byte ptr [0xB7CB49],00
+	// 暂停菜单中是否继续运行由 crashes.cfg 的 runwhenpaused 控制,
+	// 补丁在下方读取配置时按需应用(默认不打 = 暂停时世界冻结, 不会被攻击)。
 
 
 	// NOTE: all the alt tab hooks here are not working. not sure why.
@@ -442,6 +442,16 @@ static void WINAPI Load(HMODULE hModule)
 					MemPut<BYTE>(0x53E227, 0xC3); // ret
 				}
 			}
+			else if (type.compare("runwhenpaused") == 0)
+			{
+				// 警告: 设为 1 后, 暂停菜单(ESC)中游戏继续运行,
+				// SA-MP 保持同步, 其他玩家仍可攻击并杀死你! 默认 0(原版: 暂停即冻结)。
+				if (enabled == 1)
+				{
+					MemCpy((void*)0x53E9B3, "\x75\x44\x90\x90\x90\x90", 6); // SA-MP 认为始终未暂停
+					MemPut < BYTE >(0x561AF6, 0x00); // 暂停状态不再写入, 游戏继续运行
+				}
+			}
 		}
 	} else {
 		ofstream ofile(path);
@@ -465,6 +475,7 @@ static void WINAPI Load(HMODULE hModule)
 		ofile << "interiorreflections 1" << endl;
 		ofile << "fpslimit 0" << endl;
 		ofile << "nopostfx 0" << endl;
+		ofile << "runwhenpaused 0" << endl;
 		ofile.close();
 
 		brightness = -1;
@@ -490,6 +501,7 @@ static void WINAPI Load(HMODULE hModule)
 		readfile << "interiorreflections - set to 0 to disable interior reflections" << endl;
 		readfile << "fpslimit - set to 1 to enable the removal of SA-MP's internal FPS limiting code. By default, you can't get over 100 fps. set to 0 to disable this. (NOTE: This may cause issues with newer SA-MP releases)." << endl;
 		readfile << "nopostfx - set to 1 to disable post effects." << endl;
+		readfile << "runwhenpaused - WARNING: set to 1 to keep the game running while in the pause menu (ESC); SA-MP stays in sync so other players can still damage and kill you. 0 = vanilla behaviour, game freezes when paused." << endl;
 		readfile.close();
 	}
 
